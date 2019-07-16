@@ -1,5 +1,6 @@
 import atexit
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -7,6 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException
 start_page_url='https://www.1800contacts.com/lenses'
 Expected_DOM_elem='ProductLink'
+#get user information
 def prompt_user():
     xpaths=[]
     another_xpath=True
@@ -17,7 +19,9 @@ def prompt_user():
         another_elem=True
         while another_elem:
             elemortext= raw_input("Please provide the element name you want the text from or type \"text\" for the elements inner text: ")
-            list_of_elems.append(elemortext)
+            elemortextdesc=raw_input("Please provide a name or description for this element: ")
+
+            list_of_elems.append((elemortext,elemortextdesc))
             while True:
                 another=raw_input("Would you like to add another element(Y,n)?")
                 try:
@@ -54,8 +58,10 @@ def prompt_user():
 
 xpaths=prompt_user()
 print(xpaths)
-
-driver = webdriver.Remote(command_executor='http://127.0.0.1:4444/wd/hub', desired_capabilities={'browserName':'chrome', 'platform':'WINDOWS'})
+#Setup Headless Chrome Server
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+driver=webdriver.Chrome(chrome_options=chrome_options, executable_path='chromedriver')
 try:
     url=driver.get(start_page_url)
     element=WebDriverWait(driver, 10).until(
@@ -63,6 +69,8 @@ try:
     )
 except TimeoutException:
     raise TimeoutException('The URL:"'+start_page_url+'" does not have the DOMElement:"'+Expected_DOM_elem+'"')	
+print("The item list is at URL:"+start_page_url)
+#TODO: THIS NEEDS TO BE MADE GENERIC
 products=driver.find_elements_by_class_name('ProductLink')
 product_urls=[]
 contacts_extracted_info = []
@@ -75,9 +83,12 @@ for product_url in product_urls:
     dict_of_url_info={}
     dict_of_url_info['url']=product_url
     list_of_results.append(dict_of_url_info)	
+    #TODO: Should add a Wait here
     url=driver.get(product_url)
+    print("currently scraping URL:"+product_url)
     for dict_of_xpath_and_elems in xpaths:
         for xpath, elems in dict_of_xpath_and_elems.items():
+          print("looking in URL:"+product_url+" for elems:"+str(elems) + " in xpath:"+str(xpath))
           expected_xpath=xpath.lower()
           try:
               WebDriverWait(driver,10).until(
@@ -88,12 +99,14 @@ for product_url in product_urls:
           else:
             dict_of_url_info["xpath"]=expected_xpath
             dom_xpath_obj = driver.find_element_by_xpath(expected_xpath)
+            dict_of_elems={}
             for expected_element in elems:
-                if expected_element=="text":
+                if expected_element[0]=="text":
                     info=dom_xpath_obj.text
-                    dict_of_url_info["info"]=info
+                    dict_of_elems[str(expected_element[1])]=info
                 else:
-                    info=dom_xpath_obj.get_attribute(expected_element)
-                    dict_of_url_info["info"]=info
+                    info=dom_xpath_obj.get_attribute(expected_element[0])
+                    dict_of_elems[str(expected_element[1])]=info
+            dict_of_url_info["info"]=dict_of_elems
     print(list_of_results)
 
